@@ -1,40 +1,11 @@
 #!/usr/bin/python
 
-from datetime import datetime
-import MySQLdb
+from boto.s3.connection import S3Connection, Location
+from boto.s3.key import Key
+import bz2
+import hashlib
 import sys
-
-def Connect():
-  return MySQLdb.connect(
-    host="localhost",
-    user="moor-mails",
-    passwd="********",
-    db="moor-mails")
-
-def Disconnect(connection):
-  connection.close()
-
-def ReadEmail():
-  return sys.stdin.read()
-
-def AddEmail(connection, content, sender, recipient):
-  cursor = connection.cursor()
-
-  query = """INSERT INTO email_meta SET
-    tstamp=%s,
-    recipient=%s,
-    sender=%s"""
-  parameters = (datetime.now(), recipient, sender)
-  cursor.execute(query, parameters)
-
-  id = cursor.lastrowid
-  query = """INSERT INTO email_data SET
-    id=%s,
-    data=%s"""
-  parameters = (id, content)
-  cursor.execute(query, parameters)
-
-  connection.commit()
+from datetime import datetime
 
 assert len(sys.argv) == 3
 recipient = sys.argv[1]
@@ -43,8 +14,23 @@ assert recipient
 assert sender
 
 try:
-  connection = Connect()
-  AddEmail(connection, ReadEmail(), sender, recipient)
-  Disconnect(connection)
+  connection = S3Connection("***", "***", host="s3-us-west-2.amazonaws.com")
+  bucket = connection.get_bucket("moor-email")
+
+  data = bz2.compress(sys.stdin.read())
+  checksum = hashlib.md5(data).hexdigest()
+  recipient = recipient.lower()
+  sender = sender.lower()
+  time = datetime.now()
+
+  key_name = "%s/%04d/%02d/%s-%s" % (recipient, time.year, time.month, time.isoformat(), checksum)
+
+  key = Key(bucket, key_name)
+  key.set_metadata("time", time.isoformat())
+  key.set_metadata("recipient", recipient)
+  key.set_metadata("sender", sender)
+  key.set_contents_from_string(data, replace=False, encrypt_key=True)
+  connection.close()
 except:
+  print(sys.exc_info())
   sys.exit(75) # postfix temporary failure
