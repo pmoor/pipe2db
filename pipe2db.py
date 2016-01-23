@@ -21,13 +21,16 @@ try:
   sender = sender.lower()
   time = datetime.now()
 
-  key_name = "%s/%s/%04d/%02d/%s-%s" % (bucket_name, recipient, time.year, time.month, time.isoformat(), checksum)
+  key_name = "%s/%s/%04d/%02d/%s-%s.txt.bz2" % (
+      bucket_name, recipient, time.year, time.month, time.isoformat(), checksum)
 
   uri = boto.storage_uri(key_name, "gs")
   key = uri.new_key()
   key.set_metadata("time", time.isoformat())
   key.set_metadata("recipient", recipient)
   key.set_metadata("sender", sender)
+  key.set_metadata("content-encoding", "bzip2")
+  key.set_metadata("content-type", "text/plain")
   key.set_contents_from_string(data, replace=False)
 except:
   print(sys.exc_info())
